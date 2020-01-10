@@ -1,0 +1,122 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "aspnetCoreEnvironmentName": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "Development",
+            "metadata": {
+                "description": "The ASPNET Core Environment Name (e.g. 'Development' or 'Staging' or 'Production').",
+                "docoUrl": "https://docs.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.hosting.environmentname?view=aspnetcore-2.1",
+                "comment": "Unfortunately we check for 'development' in code, so any local dev environment needs to be this. This results is more complexity.."
+            }
+        },
+        "svcPlanSize": {
+            "type": "string",
+            "defaultValue": "D1",
+            "metadata": {
+                "description": "The instance size of the App Service Plan."
+            }
+        },
+        "svcPlanSku": {
+            "type": "string",
+            "allowedValues": [
+                "Free",
+                "Shared",
+                "Basic",
+                "Standard",
+                "Premium"
+            ],
+            "defaultValue": "Shared",
+            "metadata": {
+                "description": "The pricing tier of the App Service plan."
+            }
+        },
+        "shouldDeployProdSlot": {
+            "type": "string",
+            "defaultValue": "false",
+            "metadata": {
+                "description": "Whether or not the production app service slot should be deployed - should only be true for new environments e.g phoenix"
+            }
+        }
+    },
+    "resources": [
+        {
+            "condition": "[bool(parameters('shouldDeployProdSlot'))]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2015-08-01",
+            "name": "KMD-example-prod-slot-appsvcplan",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('svcPlanSize')]",
+                "tier": "[parameters('svcPlanSku')]",
+                "capacity": 1
+            }
+        },
+        {
+            "condition": "[bool(parameters('shouldDeployProdSlot'))]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2015-08-01",
+            "name": "KMD-example-prod-slot-deploy-with-staging",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverFarms/','KMD-example-prod-slot-appsvcplan')]"
+            ],
+            "properties": {
+                "name": "KMD-example-prod-slot-deploy-with-staging",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverFarms/','KMD-example-prod-slot-appsvcplan')]",
+                "clientAffinityEnabled": false,
+                "siteConfig": {
+                    "phpVersion": "off",
+                    "alwaysOn": false,
+                    "appSettings": [
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "name": "slotconfignames",
+                    "type": "config",
+                    "apiVersion": "2015-08-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites/','KMD-example-prod-slot-deploy-with-staging')]"
+                    ],
+                    "tags": {
+                        "displayName": "slotConfigNames"
+                    },
+                    "properties": {
+                        "appSettingNames": [
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Web/sites/slots",
+            "apiVersion": "2015-08-01",
+            "name": "[concat('KMD-example-prod-slot-deploy-with-staging', '/staging')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/Sites', 'KMD-example-prod-slot-deploy-with-staging')]"
+            ],
+            "properties": {
+                "name": "[concat('KMD-example-prod-slot-deploy-with-staging', '(Staging)')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverFarms/','KMD-example-prod-slot-appsvcplan')]",
+                "clientAffinityEnabled": false,
+                "siteConfig": {
+                    "phpVersion": "off",
+                    "alwaysOn": "false",
+                    "appSettings": [
+                    ]
+                }
+            }
+        }
+    ]
+}
